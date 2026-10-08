@@ -1,11 +1,14 @@
 -- ========================================================
 -- 🌿 생활지원사 휴가관리 시스템 (CareLeave Manager)
--- Supabase PostgreSQL 전체 스키마, 시드 데이터 및 RLS 정책
+-- Supabase 즉시 연동 및 웹 권한 설정 SQL 스크립트
 -- ========================================================
+-- 💡 Supabase 대시보드(SQL Editor)에서 이 스크립트 전체를 실행하시면
+--    웹 화면(index.html)에서 즉시 데이터 읽기/쓰기가 가능해집니다.
 
+-- 1. UUID 확장 모듈 활성화
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- 1. 사용자 프로필 테이블
+-- 2. 사용자 프로필 테이블 (독립 실행 및 Auth 연동 겸용)
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
@@ -16,9 +19,10 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 기존 auth.users 외래키 제약조건이 있다면 제거하여 웹 데모에서도 즉시 사용 가능하도록 설정
 ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_id_fkey;
 
--- 2. 휴가 유형 테이블
+-- 3. 휴가 유형 테이블
 CREATE TABLE IF NOT EXISTS public.leave_types (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
@@ -28,7 +32,7 @@ CREATE TABLE IF NOT EXISTS public.leave_types (
     description TEXT
 );
 
--- 3. 연차 잔여일수 테이블
+-- 4. 연차 잔여일수 테이블
 CREATE TABLE IF NOT EXISTS public.leave_balances (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -40,7 +44,7 @@ CREATE TABLE IF NOT EXISTS public.leave_balances (
     CONSTRAINT unique_user_year UNIQUE (user_id, year)
 );
 
--- 4. 휴가 신청 테이블
+-- 5. 휴가 신청 테이블
 CREATE TABLE IF NOT EXISTS public.leave_requests (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -61,6 +65,7 @@ CREATE TABLE IF NOT EXISTS public.leave_requests (
 -- 🎁 초기 시드 데이터 삽입
 -- ========================================================
 
+-- 휴가 종류 등록
 INSERT INTO public.leave_types (id, name, deduction_days, requires_document, is_paid, description)
 VALUES
     (1, '전일 연차', 1.0, false, true, '하루 종일 휴가 사용 (-1.0일)'),
@@ -73,6 +78,7 @@ ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name,
     deduction_days = EXCLUDED.deduction_days;
 
+-- 생활지원사 및 관리자 기본 프로필 등록
 INSERT INTO public.profiles (id, name, phone, role, zone_code)
 VALUES
     ('a0000000-0000-0000-0000-000000000001', '김돌봄', '010-1234-5678', 'worker', '1권역'),
@@ -84,6 +90,7 @@ ON CONFLICT (id) DO UPDATE SET
     role = EXCLUDED.role,
     zone_code = EXCLUDED.zone_code;
 
+-- 김돌봄 생활지원사의 2026년 연차 잔여일수 등록
 INSERT INTO public.leave_balances (user_id, year, total_days, used_days)
 VALUES
     ('a0000000-0000-0000-0000-000000000001', EXTRACT(YEAR FROM CURRENT_DATE)::INT, 15.0, 3.5)
@@ -91,7 +98,7 @@ ON CONFLICT (user_id, year) DO UPDATE SET
     total_days = EXCLUDED.total_days;
 
 -- ========================================================
--- 🛡️ Row Level Security (RLS) 정책
+-- 🛡️ Row Level Security (RLS) 정책 (웹 클라이언트 공개 권한)
 -- ========================================================
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -99,6 +106,7 @@ ALTER TABLE public.leave_types ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.leave_balances ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.leave_requests ENABLE ROW LEVEL SECURITY;
 
+-- 기존 정책 정리
 DROP POLICY IF EXISTS "leave_types_select_all" ON public.leave_types;
 DROP POLICY IF EXISTS "profiles_select_all" ON public.profiles;
 DROP POLICY IF EXISTS "profiles_all" ON public.profiles;
@@ -109,6 +117,7 @@ DROP POLICY IF EXISTS "leave_requests_insert" ON public.leave_requests;
 DROP POLICY IF EXISTS "leave_requests_update" ON public.leave_requests;
 DROP POLICY IF EXISTS "leave_requests_all" ON public.leave_requests;
 
+-- 웹 브라우저(anon)에서도 읽기/쓰기가 가능하도록 정책 적용
 CREATE POLICY "leave_types_select_all" ON public.leave_types
     FOR SELECT TO public USING (true);
 
