@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>생활지원사 휴가관리 시스템 (CareLeave Manager)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Supabase JS SDK (CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700&display=swap');
+        body { font-family: 'Pretendard', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+
+    <!-- 상단 네비게이션 헤더 -->
+    <header class="bg-emerald-700 text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <span class="text-2xl">🌿</span>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight">생활지원사 휴가관리</h1>
+                    <p class="text-xs text-emerald-100">노인맞춤돌봄서비스 수행기관 솔루션</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-2">
+                <!-- Supabase 연결 상태 뱃지 -->
+                <button onclick="openConfigModal()" id="supabaseStatusBadge" class="bg-emerald-800 hover:bg-emerald-900 text-xs px-3 py-1.5 rounded-full flex items-center space-x-1.5 transition">
+                    <span id="supabaseIndicator" class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                    <span id="supabaseStatusText">Supabase 미연결 (체험모드)</span>
+                    <i class="fa-solid fa-gear ml-1"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- 탭 메뉴 (생활지원사용 / 관리자용) -->
+        <div class="bg-emerald-800/80 px-4">
+            <div class="max-w-6xl mx-auto flex space-x-2">
+                <button onclick="switchTab('worker')" id="tabWorker" class="px-4 py-2.5 text-sm font-semibold border-b-2 border-white text-white">
+                    <i class="fa-solid fa-user mr-1.5"></i>생활지원사용 (신청/조회)
+                </button>
+                <button onclick="switchTab('admin')" id="tabAdmin" class="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-emerald-100 hover:text-white">
+                    <i class="fa-solid fa-clipboard-check mr-1.5"></i>전담복지사용 (결재/관리)
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 메인 컨테이너 -->
+    <main class="max-w-6xl mx-auto px-4 py-6">
+
+        <!-- ========================================== -->
+        <!-- 탭 1: 생활지원사용 화면 -->
+        <!-- ========================================== -->
+        <section id="workerSection" class="space-y-6">
+            <!-- 사용자 프로필 및 연차 현황 카드 -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center space-x-4">
+                    <div class="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-xl flex items-center justify-center text-xl font-bold">
+                        김
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <span class="font-bold text-slate-800" id="currentUserName">김돌봄 생활지원사</span>
+                            <span class="text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-medium">1권역</span>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-0.5">담당 어르신 14명</p>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <p class="text-xs text-slate-500 font-medium">2026년 총 연차</p>
+                    <p class="text-2xl font-bold text-slate-800 mt-1" id="statTotalDays">15.0 <span class="text-xs font-normal text-slate-500">일</span></p>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <p class="text-xs text-slate-500 font-medium">사용 연차</p>
+                    <p class="text-2xl font-bold text-amber-600 mt-1" id="statUsedDays">3.5 <span class="text-xs font-normal text-slate-500">일</span></p>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-emerald-300 bg-emerald-50/40">
+                    <p class="text-xs text-emerald-700 font-medium">잔여 연차</p>
+                    <p class="text-2xl font-bold text-emerald-700 mt-1" id="statRemainingDays">11.5 <span class="text-xs font-normal text-emerald-600">일</span></p>
+                </div>
+            </div>
+
+            <!-- 2열 레이아웃: 휴가 신청 폼 & 최근 신청 내역 -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <!-- 휴가 신청 폼 (5 cols) -->
+                <div class="lg:col-span-5 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center">
+                        <i class="fa-solid fa-calendar-plus text-emerald-600 mr-2"></i>휴가 간편 신청
+                    </h2>
+
+                    <form id="leaveRequestForm" onsubmit="handleLeaveSubmit(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">휴가 종류 <span class="text-red-500">*</span></label>
+                            <select id="leaveTypeSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                                <option value="1">전일 연차 (-1.0일)</option>
+                                <option value="2">오전 반차 (-0.5일)</option>
+                                <option value="3">오후 반차 (-0.5일)</option>
+                                <option value="4">병가 (진단서 첨부)</option>
+                                <option value="5">공가 (유급 0일)</option>
+                                <option value="6">경조사 휴가</option>
+                            </select>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">시작일 <span class="text-red-500">*</span></label>
+                                <input type="date" id="startDate" required class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">종료일 <span class="text-red-500">*</span></label>
+                                <input type="date" id="endDate" required class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            </div>
+                        </div>
+
+                        <!-- 대체근무자 지정 (노인돌봄 특화) -->
+                        <div class="bg-amber-50/70 p-3.5 rounded-xl border border-amber-200">
+                            <label class="block text-xs font-bold text-amber-900 mb-1 flex items-center">
+                                <i class="fa-solid fa-people-arrows mr-1.5 text-amber-600"></i>대체 근무 생활지원사 지정 <span class="text-red-500 ml-0.5">*</span>
+                            </label>
+                            <p class="text-[11px] text-amber-700 mb-2">휴가 기간 동안 담당 어르신 안부확인을 대신할 동료를 지정하세요.</p>
+                            <select id="substituteSelect" class="w-full border border-amber-300 bg-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                                <option value="sub-1">이서포트 생활지원사 (1권역, 동료)</option>
+                                <option value="sub-2">박돌봄 생활지원사 (1권역, 동료)</option>
+                                <option value="sub-3">최안심 생활지원사 (2권역, 인접)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">신청 사유 <span class="text-red-500">*</span></label>
+                            <textarea id="leaveReason" rows="3" required placeholder="예: 개인 사유 및 병원 진료" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none resize-none"></textarea>
+                        </div>
+
+                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-sm transition shadow-sm flex items-center justify-center">
+                            <i class="fa-solid fa-paper-plane mr-2"></i>휴가 신청서 제출
+                        </button>
+                    </form>
+                </div>
+
+                <!-- 내 신청 내역 및 대체근무 요청 (7 cols) -->
+                <div class="lg:col-span-7 space-y-6">
+                    <!-- 나에게 온 대체근무 요청 -->
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                        <h3 class="text-sm font-bold text-slate-800 mb-3 flex items-center text-amber-700">
+                            <i class="fa-solid fa-hand-holding-heart mr-2"></i>동료의 대체돌봄 수락 요청
+                        </h3>
+                        <div id="substituteRequestsList" class="space-y-2">
+                            <!-- 예시 아이템 -->
+                            <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+                                <div>
+                                    <span class="text-xs font-bold text-slate-800">박돌봄 지원사</span>
+                                    <span class="text-xs text-slate-500 ml-2">2026-10-15 (오후 반차)</span>
+                                    <p class="text-xs text-slate-600 mt-1">"병원 정밀검사로 인해 어르신 3분 안부전화 부탁드립니다."</p>
+                                </div>
+                                <div class="flex space-x-1.5">
+                                    <button onclick="handleAcceptSub(this)" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded-lg font-medium">수락</button>
+                                    <button onclick="handleRejectSub(this)" class="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs rounded-lg font-medium">거절</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 내 휴가 신청 내역 -->
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                        <h3 class="text-sm font-bold text-slate-800 mb-3 flex items-center">
+                            <i class="fa-solid fa-clock-rotate-left mr-2 text-slate-600"></i>내 최근 휴가 신청 내역
+                        </h3>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-xs text-left">
+                                <thead class="bg-slate-100 text-slate-600 uppercase">
+                                    <tr>
+                                        <th class="px-3 py-2 rounded-l-lg">휴가 유형</th>
+                                        <th class="px-3 py-2">기간</th>
+                                        <th class="px-3 py-2">대체자</th>
+                                        <th class="px-3 py-2 rounded-r-lg">결재 상태</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="myRequestsTableBody" class="divide-y divide-slate-100">
+                                    <tr>
+                                        <td class="px-3 py-2.5 font-medium">전일 연차</td>
+                                        <td class="px-3 py-2.5 text-slate-600">2026-10-20 ~ 2026-10-20 (1일)</td>
+                                        <td class="px-3 py-2.5 text-slate-600">이서포트</td>
+                                        <td class="px-3 py-2.5"><span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-semibold">결재 대기</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-3 py-2.5 font-medium">오전 반차</td>
+                                        <td class="px-3 py-2.5 text-slate-600">2026-09-12 (0.5일)</td>
+                                        <td class="px-3 py-2.5 text-slate-600">박돌봄</td>
+                                        <td class="px-3 py-2.5"><span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-semibold">최종 승인</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- 탭 2: 전담사회복지사 / 관리자용 화면 -->
+        <!-- ========================================== -->
+        <section id="adminSection" class="space-y-6 hidden">
+            <!-- 관리자 대시보드 요약 -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <p class="text-xs text-slate-500 font-medium">승인 대기 건수</p>
+                    <p class="text-2xl font-bold text-amber-600 mt-1" id="adminPendingCount">1 <span class="text-xs font-normal text-slate-500">건</span></p>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <p class="text-xs text-slate-500 font-medium">오늘 휴가 중인 생활지원사</p>
+                    <p class="text-2xl font-bold text-blue-600 mt-1">2 <span class="text-xs font-normal text-slate-500">명</span></p>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <p class="text-xs text-slate-500 font-medium">총 생활지원사 인원</p>
+                    <p class="text-2xl font-bold text-slate-800 mt-1">28 <span class="text-xs font-normal text-slate-500">명</span></p>
+                </div>
+            </div>
+
+            <!-- 결재 대기 목록 -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center">
+                        <i class="fa-solid fa-check-double text-emerald-600 mr-2"></i>휴가 결재 심사 대기 목록
+                    </h2>
+                    <span class="text-xs text-slate-500">돌봄 공백 여부 확인 후 승인해 주세요</span>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs text-left">
+                        <thead class="bg-slate-100 text-slate-600">
+                            <tr>
+                                <th class="px-3 py-2.5">신청자 (권역)</th>
+                                <th class="px-3 py-2.5">휴가 종류</th>
+                                <th class="px-3 py-2.5">휴가 기간</th>
+                                <th class="px-3 py-2.5">대체 근무자</th>
+                                <th class="px-3 py-2.5">사유</th>
+                                <th class="px-3 py-2.5 text-center">결재 처리</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminApprovalTableBody" class="divide-y divide-slate-100">
+                            <tr id="approvalRow1">
+                                <td class="px-3 py-3 font-bold text-slate-800">김돌봄 (1권역)</td>
+                                <td class="px-3 py-3 font-semibold text-emerald-700">전일 연차</td>
+                                <td class="px-3 py-3 text-slate-600">2026-10-20 ~ 2026-10-20 (1일)</td>
+                                <td class="px-3 py-3">
+                                    <span class="text-slate-800 font-medium">이서포트</span>
+                                    <span class="ml-1 text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">수락완료</span>
+                                </td>
+                                <td class="px-3 py-3 text-slate-500">개인 사유 및 병원 진료</td>
+                                <td class="px-3 py-3 text-center space-x-1.5">
+                                    <button onclick="approveRequest('approvalRow1')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-lg font-medium transition">승인</button>
+                                    <button onclick="rejectRequest('approvalRow1')" class="bg-rose-500 hover:bg-rose-600 text-white px-2.5 py-1.5 rounded-lg font-medium transition">반려</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ========================================== -->
+    <!-- Supabase 설정 모달 창 -->
+    <!-- ========================================== -->
+    <div id="configModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-5">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <span class="text-2xl">⚡</span>
+                    <h3 class="font-bold text-lg text-slate-900">Supabase 데이터베이스 연동</h3>
+                </div>
+                <button onclick="closeConfigModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+
+            <p class="text-xs text-slate-500 leading-relaxed">
+                Supabase 대시보드(Project Settings &gt; API)에서 제공되는 <strong>Project URL</strong> 및 <strong>anon public key</strong>를 입력하시면 실시간 데이터베이스와 바로 동기화됩니다.
+            </p>
+
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Project URL</label>
+                    <input type="text" id="supabaseUrlInput" placeholder="https://xyzcompany.supabase.co" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Anon Public Key</label>
+                    <input type="password" id="supabaseKeyInput" placeholder="eyJh..." class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+            </div>
+
+            <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 text-[11px] text-slate-600 space-y-1">
+                <p class="font-semibold text-slate-800"><i class="fa-solid fa-circle-info text-emerald-600 mr-1"></i>테이블 생성 안내</p>
+                <p>저장소의 <code class="bg-slate-200 px-1 py-0.5 rounded text-emerald-800">supabase/schema.sql</code> 파일을 복사하여 Supabase의 SQL Editor에서 실행하시면 테이블 및 RLS 규칙이 자동 생성됩니다.</p>
+            </div>
+
+            <div class="flex space-x-2 pt-2">
+                <button onclick="saveSupabaseConfig()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs transition">연결 저장 및 테스트</button>
+                <button onclick="closeConfigModal()" class="px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2.5 rounded-xl text-xs transition">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 스크립트 로직 -->
+    <script>
+        let supabaseClient = null;
+
+        // 탭 전환 함수
+        function switchTab(tab) {
+            const workerSec = document.getElementById('workerSection');
+            const adminSec = document.getElementById('adminSection');
+            const tabWorker = document.getElementById('tabWorker');
+            const tabAdmin = document.getElementById('tabAdmin');
+
+            if (tab === 'worker') {
+                workerSec.classList.remove('hidden');
+                adminSec.classList.add('hidden');
+                tabWorker.className = "px-4 py-2.5 text-sm font-semibold border-b-2 border-white text-white";
+                tabAdmin.className = "px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-emerald-100 hover:text-white";
+            } else {
+                workerSec.classList.add('hidden');
+                adminSec.classList.remove('hidden');
+                tabAdmin.className = "px-4 py-2.5 text-sm font-semibold border-b-2 border-white text-white";
+                tabWorker.className = "px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-emerald-100 hover:text-white";
+            }
+        }
+
+        // 모달 제어
+        function openConfigModal() {
+            document.getElementById('supabaseUrlInput').value = localStorage.getItem('SUPABASE_URL') || '';
+            document.getElementById('supabaseKeyInput').value = localStorage.getItem('SUPABASE_ANON_KEY') || '';
+            document.getElementById('configModal').classList.remove('hidden');
+        }
+
+        function closeConfigModal() {
+            document.getElementById('configModal').classList.add('hidden');
+        }
+
+        // Supabase 설정 저장 및 클라이언트 초기화
+        async function saveSupabaseConfig() {
+            const url = document.getElementById('supabaseUrlInput').value.trim();
+            const key = document.getElementById('supabaseKeyInput').value.trim();
+
+            if (!url || !key) {
+                alert('Project URL과 Anon Key를 모두 입력해 주세요.');
+                return;
+            }
+
+            try {
+                const client = window.supabase.createClient(url, key);
+                // 연결 테스트 쿼리
+                const { data, error } = await client.from('leave_types').select('count', { count: 'exact', head: true });
+                
+                localStorage.setItem('SUPABASE_URL', url);
+                localStorage.setItem('SUPABASE_ANON_KEY', key);
+                supabaseClient = client;
+
+                updateStatusUI(true);
+                alert('🎉 Supabase 연결 성공! 실시간 데이터베이스와 연동되었습니다.');
+                closeConfigModal();
+            } catch (err) {
+                alert('연결 실패: ' + (err.message || 'Supabase 정보를 확인해 주세요.'));
+            }
+        }
+
+        function updateStatusUI(isConnected) {
+            const indicator = document.getElementById('supabaseIndicator');
+            const text = document.getElementById('supabaseStatusText');
+            if (isConnected) {
+                indicator.className = "w-2.5 h-2.5 rounded-full bg-emerald-300 ring-2 ring-emerald-200 animate-pulse";
+                text.textContent = "Supabase 연결됨";
+            } else {
+                indicator.className = "w-2.5 h-2.5 rounded-full bg-amber-400";
+                text.textContent = "Supabase 미연결 (체험모드)";
+            }
+        }
+
+        // 초기 로드 시 기존 설정 확인
+        window.addEventListener('DOMContentLoaded', () => {
+            const url = localStorage.getItem('SUPABASE_URL');
+            const key = localStorage.getItem('SUPABASE_ANON_KEY');
+            if (url && key && window.supabase) {
+                supabaseClient = window.supabase.createClient(url, key);
+                updateStatusUI(true);
+            }
+
+            // 오늘 날짜로 시작일/종료일 기본 설정
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('startDate').value = today;
+            document.getElementById('endDate').value = today;
+        });
+
+        // 휴가 신청 제출 핸들러
+        function handleLeaveSubmit(e) {
+            e.preventDefault();
+            const typeText = document.getElementById('leaveTypeSelect').selectedOptions[0].text;
+            const start = document.getElementById('startDate').value;
+            const end = document.getElementById('endDate').value;
+            const subName = document.getElementById('substituteSelect').selectedOptions[0].text.split(' ')[0];
+            const reason = document.getElementById('leaveReason').value;
+
+            // 목록에 즉시 추가 (실시간 피드백)
+            const table = document.getElementById('myRequestsTableBody');
+            const newRow = document.createElement('tr');
+            newRow.innerHTML = `
+                <td class="px-3 py-2.5 font-medium">${typeText.split(' ')[0]}</td>
+                <td class="px-3 py-2.5 text-slate-600">${start} ~ ${end}</td>
+                <td class="px-3 py-2.5 text-slate-600">${subName}</td>
+                <td class="px-3 py-2.5"><span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-semibold">결재 대기</span></td>
+            `;
+            table.prepend(newRow);
+
+            alert('휴가 신청서가 성공적으로 접수되었습니다. 대체 근무자에게 수락 요청이 전송되었습니다.');
+            document.getElementById('leaveReason').value = '';
+        }
+
+        // 대체 근무 수락/거절
+        function handleAcceptSub(btn) {
+            btn.parentElement.innerHTML = '<span class="text-xs text-emerald-700 font-bold"><i class="fa-solid fa-check mr-1"></i>수락완료</span>';
+        }
+        function handleRejectSub(btn) {
+            btn.parentElement.innerHTML = '<span class="text-xs text-rose-600 font-medium">거절됨</span>';
+        }
+
+        // 관리자 승인/반려
+        function approveRequest(rowId) {
+            const row = document.getElementById(rowId);
+            if (row) {
+                row.remove();
+                document.getElementById('adminPendingCount').textContent = '0';
+                alert('휴가가 최종 승인되었습니다. 연차가 자동으로 차감되고 캘린더에 반영되었습니다.');
+            }
+        }
+        function rejectRequest(rowId) {
+            const reason = prompt('반려 사유를 입력해 주세요:', '담당 권역 돌봄 공백 우려');
+            if (reason) {
+                const row = document.getElementById(rowId);
+                if (row) {
+                    row.remove();
+                    document.getElementById('adminPendingCount').textContent = '0';
+                    alert('휴가 신청이 반려 처리되었습니다.');
+                }
+            }
+        }
+    </script>
+</body>
+</html>
