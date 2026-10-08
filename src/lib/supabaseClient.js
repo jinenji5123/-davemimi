@@ -1,12 +1,16 @@
 /**
  * Supabase 클라이언트 초기화 모듈
  * 
- * 환경 변수 또는 브라우저 로컬스토리지에 저장된 설정값으로 Supabase 클라이언트를 초기화합니다.
+ * 환경 변수, 브라우저 로컬스토리지 또는 기본 프로젝트 설정값으로 Supabase 클라이언트를 초기화합니다.
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-// 1. 환경 변수 또는 localStorage에서 Supabase 연결 정보 가져오기
+// 기본 연동 프로젝트 설정
+const DEFAULT_URL = 'https://ukxucrngbcaqznxbydxa.supabase.co';
+const DEFAULT_KEY = 'sb_publishable_WurIE-C_QoGeecd0R30oYQ_4B_fW3Ty';
+
+// 1. 환경 변수, localStorage 또는 기본값에서 Supabase 연결 정보 가져오기
 const getSupabaseConfig = () => {
     // Vite / Next.js 환경 변수 지원
     const envUrl = (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SUPABASE_URL) 
@@ -18,8 +22,8 @@ const getSupabaseConfig = () => {
     const localUrl = typeof window !== 'undefined' ? localStorage.getItem('SUPABASE_URL') : null;
     const localKey = typeof window !== 'undefined' ? localStorage.getItem('SUPABASE_ANON_KEY') : null;
 
-    const supabaseUrl = envUrl || localUrl || '';
-    const supabaseAnonKey = envKey || localKey || '';
+    const supabaseUrl = envUrl || localUrl || DEFAULT_URL;
+    const supabaseAnonKey = envKey || localKey || DEFAULT_KEY;
 
     return { supabaseUrl, supabaseAnonKey };
 };

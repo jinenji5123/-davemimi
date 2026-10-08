@@ -342,10 +342,13 @@
             document.getElementById('configModal').classList.add('hidden');
         }
 
+        const DEFAULT_URL = 'https://ukxucrngbcaqznxbydxa.supabase.co';
+        const DEFAULT_KEY = 'sb_publishable_WurIE-C_QoGeecd0R30oYQ_4B_fW3Ty';
+
         // Supabase 설정 저장 및 클라이언트 초기화
         async function saveSupabaseConfig() {
-            const url = document.getElementById('supabaseUrlInput').value.trim();
-            const key = document.getElementById('supabaseKeyInput').value.trim();
+            const url = document.getElementById('supabaseUrlInput').value.trim() || DEFAULT_URL;
+            const key = document.getElementById('supabaseKeyInput').value.trim() || DEFAULT_KEY;
 
             if (!url || !key) {
                 alert('Project URL과 Anon Key를 모두 입력해 주세요.');
@@ -361,33 +364,43 @@
                 localStorage.setItem('SUPABASE_ANON_KEY', key);
                 supabaseClient = client;
 
-                updateStatusUI(true);
-                alert('🎉 Supabase 연결 성공! 실시간 데이터베이스와 연동되었습니다.');
+                updateStatusUI(true, url);
+                if (error && error.code === 'PGRST205') {
+                    alert('⚡ Supabase 프로젝트 연결 성공!\n\n단, 아직 테이블이 생성되지 않았습니다.\n저장소의 supabase/schema.sql을 Supabase SQL Editor에서 실행해 주세요!');
+                } else {
+                    alert('🎉 Supabase 연결 성공! 실시간 데이터베이스와 연동되었습니다.');
+                }
                 closeConfigModal();
             } catch (err) {
                 alert('연결 실패: ' + (err.message || 'Supabase 정보를 확인해 주세요.'));
             }
         }
 
-        function updateStatusUI(isConnected) {
+        function updateStatusUI(isConnected, url = DEFAULT_URL) {
             const indicator = document.getElementById('supabaseIndicator');
             const text = document.getElementById('supabaseStatusText');
             if (isConnected) {
+                const projectId = url ? url.replace('https://', '').split('.')[0] : 'ukxucrng...';
                 indicator.className = "w-2.5 h-2.5 rounded-full bg-emerald-300 ring-2 ring-emerald-200 animate-pulse";
-                text.textContent = "Supabase 연결됨";
+                text.textContent = `Supabase 연결됨 (${projectId})`;
             } else {
                 indicator.className = "w-2.5 h-2.5 rounded-full bg-amber-400";
                 text.textContent = "Supabase 미연결 (체험모드)";
             }
         }
 
-        // 초기 로드 시 기존 설정 확인
-        window.addEventListener('DOMContentLoaded', () => {
-            const url = localStorage.getItem('SUPABASE_URL');
-            const key = localStorage.getItem('SUPABASE_ANON_KEY');
-            if (url && key && window.supabase) {
-                supabaseClient = window.supabase.createClient(url, key);
-                updateStatusUI(true);
+        // 초기 로드 시 자동 연결
+        window.addEventListener('DOMContentLoaded', async () => {
+            const url = localStorage.getItem('SUPABASE_URL') || DEFAULT_URL;
+            const key = localStorage.getItem('SUPABASE_ANON_KEY') || DEFAULT_KEY;
+            
+            if (window.supabase) {
+                try {
+                    supabaseClient = window.supabase.createClient(url, key);
+                    updateStatusUI(true, url);
+                } catch (e) {
+                    console.warn('Supabase auto-init error:', e);
+                }
             }
 
             // 오늘 날짜로 시작일/종료일 기본 설정
@@ -395,6 +408,13 @@
             document.getElementById('startDate').value = today;
             document.getElementById('endDate').value = today;
         });
+
+        // 모달 제어
+        function openConfigModal() {
+            document.getElementById('supabaseUrlInput').value = localStorage.getItem('SUPABASE_URL') || DEFAULT_URL;
+            document.getElementById('supabaseKeyInput').value = localStorage.getItem('SUPABASE_ANON_KEY') || DEFAULT_KEY;
+            document.getElementById('configModal').classList.remove('hidden');
+        }
 
         // 휴가 신청 제출 핸들러
         function handleLeaveSubmit(e) {
